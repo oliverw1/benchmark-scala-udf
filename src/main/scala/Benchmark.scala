@@ -9,7 +9,7 @@ import org.apache.spark.sql.{Column, DataFrame, SaveMode, SparkSession}
 
 object Benchmark {
   def main(args: Array[String]) {
-    val spark = SparkSession.builder.master("local[2]").getOrCreate()
+    val spark = SparkSession.builder.master("local[3]").getOrCreate()
     val salt = "myextreme4567Sal!"
     /*
     1. Generate a file of random 15 character hex strings.
@@ -19,37 +19,39 @@ object Benchmark {
     */
 
     val path = "/tmp/random_15char_hexes"
+    println(spark.range(5).count()) // remove some of the warm-up time
 
     val framer = spark.read.parquet(path)
 
-    (1 to 20).foreach { c =>
-      val li = time {
+    (1 to 20).foreach { _ =>
+      time {
         framer.withColumn("imsi", tokenizeUdf(col("imsi"), lit(salt)))
       }
 
-      val ne1 = time {
+      time {
         framer.withColumn("imsi", altTokenization(col("imsi"), salt))
       }
 
-      val ne4 = time {
+      time {
         framer.withColumn("imsi", altTokenization2(col("imsi"), salt))
       }
 
-      val ne7 = time {
+      time {
         framer.withColumn("imsi", altTokenization3(col("imsi"), salt))
       }
     }
 
+    spark.stop()
   }
 
 
-  def time(block: => DataFrame): String = {
+  def time(block: => DataFrame): Any = {
     val t0 = System.nanoTime()
     val result = block // call-by-name
+    println(s"There were ${result.count()} records.")
+    // result.write.mode(SaveMode.Overwrite).parquet("/tmp/bar")
     val t1 = System.nanoTime()
     println("Elapsed time: " + (t1 - t0) + "ns")
-    result.write.mode(SaveMode.Overwrite).parquet("/tmp/fob1")
-    "x"
   }
 
 
